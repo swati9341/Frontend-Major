@@ -48,16 +48,24 @@ def fetch_templates():
         return []
 
 def fetch_invoice_items():
-    """Fetches all invoice items from the backend."""
+    """Fetch invoice items for the logged-in user."""
     try:
-        # The backend's GET /invoice_items/ endpoint currently returns all items.
-        # If user-specific items are needed, the backend endpoint would require modification.
-        res = requests.get(f"{BACKEND_URL}/invoice_items/", headers=auth_headers())
+        if not st.session_state.user_id:
+            return []
+
+        res = requests.get(
+            f"{BACKEND_URL}/invoice_items/",
+            params={"user_id": st.session_state.user_id},
+            headers=auth_headers()
+        )
+
+
         if res.status_code == 200:
             return res.json()
         else:
             st.error(f"Error fetching invoice items: {res.text}")
         return []
+
     except Exception as e:
         st.error(f"Error fetching invoice items: {e}")
         return []
