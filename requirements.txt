@@ -1,0 +1,5 @@
+streamlit
+streamlit-shadcn-ui
+requests
+pandas
+python-dotenv
