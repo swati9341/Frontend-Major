@@ -25,6 +25,9 @@ if "user_name" not in st.session_state:
 if "user_id" not in st.session_state: # Add user_id to session state
     st.session_state.user_id = None
 
+if "current_page" not in st.session_state:
+    st.session_state.current_page = 1
+
 
 # -----------------------------
 # Helpers
@@ -165,6 +168,7 @@ def dashboard_ui():
             st.session_state.token = None
             st.session_state.user_name = "User"
             st.session_state.user_id = None # Clear user_id on logout
+            st.session_state.current_page = 1
             st.rerun()
 
     st.divider()
@@ -189,10 +193,22 @@ def dashboard_ui():
         if not invoice_items:
             st.info("No invoices found. Create one in the 'Create New Invoice' tab.")
         else:
+            # Pagination logic
+            ITEMS_PER_PAGE = 5
+            total_items = len(invoice_items)
+            total_pages = (total_items - 1) // ITEMS_PER_PAGE + 1
+            
+            if st.session_state.current_page > total_pages:
+                st.session_state.current_page = total_pages
+                
+            start_idx = (st.session_state.current_page - 1) * ITEMS_PER_PAGE
+            end_idx = start_idx + ITEMS_PER_PAGE
+            paged_items = invoice_items[start_idx:end_idx]
+
             # Display invoice items with created_at column
             st.markdown("### Invoice Items")
             
-            for item in invoice_items:
+            for item in paged_items:
                 col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
                 
                 with col1:
@@ -226,6 +242,21 @@ def dashboard_ui():
                             st.error(f"Error: {e}")
         
         st.caption("✅ Click PDF button to download invoice as PDF")
+        
+        if invoice_items:
+            # Pagination Controls
+            st.divider()
+            col_prev, col_info, col_next = st.columns([1, 8, 1])
+            with col_prev:
+                if st.button("⬅️ Prev", disabled=(st.session_state.current_page <= 1)):
+                    st.session_state.current_page -= 1
+                    st.rerun()
+            with col_info:
+                st.markdown(f"<div style='text-align: center;'>Page {st.session_state.current_page} of {total_pages}</div>", unsafe_allow_html=True)
+            with col_next:
+                if st.button("Next ➡️", disabled=(st.session_state.current_page >= total_pages)):
+                    st.session_state.current_page += 1
+                    st.rerun()
 
     # -----------------------------
     # TAB 2: Create New Invoice (From Template)
@@ -268,7 +299,7 @@ def dashboard_ui():
                     "invoice_id": selected_template["id"],
                     "userId": st.session_state.user_id,
                     "description": f"Invoice item from template '{selected_template_name}' with details: {json.dumps(input_data)}",
-                    "data": json.dumps(input_data)
+                    "data": input_data
                 }
 
                 if not st.session_state.user_id:
