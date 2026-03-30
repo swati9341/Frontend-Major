@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@invoicesystem.com")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 st.set_page_config(page_title="Invoice System", layout="wide")
 
@@ -27,6 +29,9 @@ if "user_id" not in st.session_state: # Add user_id to session state
 
 if "current_page" not in st.session_state:
     st.session_state.current_page = 1
+
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
 
 
 # -----------------------------
@@ -88,68 +93,106 @@ def fetch_demo_invoices():
         st.warning(f"Demo invoices not available: {e}")
         return []
 
+def create_template(template_data):
+    """Create a new invoice template."""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/templates/create",
+            json=template_data
+        )
+        return response
+    except Exception as e:
+        st.error(f"Error creating template: {e}")
+        return None
+
 # -----------------------------
 # LOGIN/SIGNUP UI
 # -----------------------------
 def auth_ui():
     st.title("Invoice System - Login/Signup")
 
-    tab1, tab2 = st.tabs(["Login", "Signup"])
+    # Login Type Selection (Admin vs User)
+    login_type = st.radio("Select Login Type", ["User", "Admin"], horizontal=True)
+    st.divider()
 
-    with tab1:
-        st.header("Login")
-        email = st_shadcn_ui.input("Email", key="login_email")
-        password = st_shadcn_ui.input("Password", type="password", key="login_password")
+    if login_type == "User":
+        tab1, tab2 = st.tabs(["Login", "Signup"])
 
-        if st_shadcn_ui.button("Login", key="login_button"):
-            try:
-                response = requests.post(
-                    f"{BACKEND_URL}/auth/login",
-                    json={"email": email, "password": password}
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    st.session_state.token = data["access_token"]
-                    # Assuming the backend returns user_id upon successful login
-                    # You might need to adjust this based on your actual backend response
-                    st.session_state.user_id = data.get("user_id") # Store user_id
-                    st.session_state.user_name = email.split("@")[0].title()
+        with tab1:
+            st.header("User Login")
+            email = st_shadcn_ui.input("Email", key="login_email")
+            password = st_shadcn_ui.input("Password", type="password", key="login_password")
 
-                    st.success("Login successful!")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-    with tab2:
-        st.header("Signup")
-        name = st_shadcn_ui.input("Name", key="signup_name")
-        email = st_shadcn_ui.input("Email", key="signup_email")
-        phone = st_shadcn_ui.input("Phone", key="signup_phone")
-        password = st_shadcn_ui.input("Password", type="password", key="signup_password")
-        confirm_password = st_shadcn_ui.input("Confirm Password", type="password", key="signup_confirm")
-
-        if st_shadcn_ui.button("Signup", key="signup_button"):
-            if password != confirm_password:
-                st.error("Passwords do not match!")
-            else:
+            if st_shadcn_ui.button("Login", key="login_button"):
                 try:
                     response = requests.post(
-                        f"{BACKEND_URL}/auth/register",
-                        json={
-                            "name": name,
-                            "email": email,
-                            "phone": phone,
-                            "password": password
-                        }
+                        f"{BACKEND_URL}/auth/login",
+                        json={"email": email, "password": password}
                     )
                     if response.status_code == 200:
-                        st.success("Signup successful! Now login.")
+                        data = response.json()
+                        st.session_state.token = data["access_token"]
+                        # Assuming the backend returns user_id upon successful login
+                        # You might need to adjust this based on your actual backend response
+                        st.session_state.user_id = data.get("user_id") # Store user_id
+                        st.session_state.user_name = email.split("@")[0].title()
+                        st.session_state.is_admin = False
+
+                        st.success("Login successful!")
+                        st.rerun()
                     else:
-                        st.error(f"Signup failed: {response.text}")
+                        st.error("Invalid credentials")
                 except Exception as e:
                     st.error(f"Error: {e}")
+
+        with tab2:
+            st.header("Signup")
+            name = st_shadcn_ui.input("Name", key="signup_name")
+            email = st_shadcn_ui.input("Email", key="signup_email")
+            phone = st_shadcn_ui.input("Phone", key="signup_phone")
+            password = st_shadcn_ui.input("Password", type="password", key="signup_password")
+            confirm_password = st_shadcn_ui.input("Confirm Password", type="password", key="signup_confirm")
+
+            if st_shadcn_ui.button("Signup", key="signup_button"):
+                if password != confirm_password:
+                    st.error("Passwords do not match!")
+                else:
+                    try:
+                        response = requests.post(
+                            f"{BACKEND_URL}/auth/register",
+                            json={
+                                "name": name,
+                                "email": email,
+                                "phone": phone,
+                                "password": password
+                            }
+                        )
+                        if response.status_code == 200:
+                            st.success("Signup successful! Now login.")
+                        else:
+                            st.error(f"Signup failed: {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+    else:  # Admin Login
+        st.header("Admin Login")
+        st.info("🔐 Admin access requires special credentials.")
+        
+        admin_email = st_shadcn_ui.input("Admin Email", key="admin_email")
+        admin_password = st_shadcn_ui.input("Admin Password", type="password", key="admin_password")
+
+        if st_shadcn_ui.button("Admin Login", key="admin_login_button"):
+            # Verify admin credentials against env variables
+            if admin_email == ADMIN_EMAIL and admin_password == ADMIN_PASSWORD:
+                st.session_state.token = "admin_token"  # Set a simple admin token
+                st.session_state.user_name = "Admin"
+                st.session_state.is_admin = True
+                st.session_state.user_id = None  # Admin doesn't have user_id
+                
+                st.success("Admin login successful!")
+                st.rerun()
+            else:
+                st.error("Invalid admin credentials")
 
 
 # -----------------------------
@@ -181,11 +224,14 @@ def dashboard_ui():
     with tab1:
         st.subheader("Your Invoices")
 
-        colA, colB = st.columns([3, 2])
+        colA, colB, colC = st.columns([3, 2, 1])
         with colA:
             search = st.text_input("Search invoice (Invoice No / Customer)")
         with colB:
             filter_value = st.selectbox("Filter", ["All", "This Month", "Last 30 Days"])
+        with colC:
+            if st_shadcn_ui.button("🔄 Refresh", key="refresh_invoices"):
+                st.rerun()
 
         # Fetch invoice items
         invoice_items = fetch_invoice_items()
@@ -321,10 +367,147 @@ def dashboard_ui():
                     st.error(f"Error: {e}")
 
 
+
+# -----------------------------
+# ADMIN DASHBOARD UI
+# -----------------------------
+def admin_dashboard_ui():
+    # Top header row
+    col1, col2 = st.columns([8, 2])
+
+    with col1:
+        st.markdown(f"## 👨‍💼 **Admin Dashboard**")
+        st.caption("Manage invoice templates and system configuration.")
+
+    with col2:
+        if st_shadcn_ui.button("Logout", key="admin_logout_btn"):
+            st.session_state.token = None
+            st.session_state.user_name = "User"
+            st.session_state.user_id = None
+            st.session_state.is_admin = False
+            st.session_state.current_page = 1
+            st.rerun()
+
+    st.divider()
+
+    tab1, tab2 = st.tabs(["📋 View Templates", "➕ Create Template"])
+
+    # -----------------------------
+    # TAB 1: View Templates
+    # -----------------------------
+    with tab1:
+        st.subheader("All Invoice Templates")
+
+        if st_shadcn_ui.button("🔄 Refresh Templates", key="refresh_templates"):
+            st.rerun()
+
+        templates = fetch_templates()
+
+        if not templates:
+            st.info("No templates found. Create one in the 'Create Template' tab.")
+        else:
+            # Display templates in a table-like format
+            for template in templates:
+                with st.expander(f"📄 {template['template_name']}", expanded=False):
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        st.write(f"**ID:** {template['id']}")
+                        st.write(f"**Type:** {template['type']}")
+                        st.write(f"**Created At:** {template.get('created_at', 'N/A')}")
+                        st.write(f"**Mandatory Params:** {', '.join(template.get('mandatory_params', []))}")
+                    with col2:
+                        st.write("**HTML Content:**")
+                        st.code(template['html_content'], language="html")
+
+    # -----------------------------
+    # TAB 2: Create Template
+    # -----------------------------
+    with tab2:
+        st.subheader("Create New Invoice Template")
+
+        st.info("Fill in the details below to create a new invoice template.")
+
+        template_name = st.text_input(
+            "Template Name",
+            placeholder="e.g., Professional Invoice",
+            key="template_name_input"
+        )
+
+        template_type = st.selectbox(
+            "Template Type",
+            ["invoice", "estimate", "receipt", "quotation"],
+            key="template_type_select"
+        )
+
+        st.write("**Mandatory Parameters** (comma-separated)")
+        mandatory_params_input = st.text_area(
+            "Enter parameter names",
+            placeholder="e.g., customer_name, invoice_date, total_amount",
+            key="mandatory_params_input",
+            height=100
+        )
+
+        st.write("**HTML Content**")
+        html_content = st.text_area(
+            "Paste your HTML template",
+            placeholder="<html><body>Your template here...</body></html>",
+            key="html_content_input",
+            height=250
+        )
+
+        # Parse mandatory params
+        mandatory_params = [
+            param.strip() for param in mandatory_params_input.split(",")
+            if param.strip()
+        ] if mandatory_params_input else []
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if st_shadcn_ui.button("Preview HTML", key="preview_html_btn"):
+                if html_content:
+                    st.code(html_content, language="html")
+                else:
+                    st.warning("Please enter HTML content first.")
+
+        with col2:
+            if st_shadcn_ui.button("Create Template ✅", key="create_template_btn"):
+                # Validation
+                if not template_name:
+                    st.error("Template name is required.")
+                elif not html_content:
+                    st.error("HTML content is required.")
+                elif not mandatory_params and not st.checkbox("Allow template without mandatory parameters?", key="allow_no_params"):
+                    st.error("Please add at least one mandatory parameter or allow none.")
+                else:
+                    # Prepare payload
+                    template_payload = {
+                        "template_name": template_name,
+                        "html_content": html_content,
+                        "type": template_type,
+                        "mandatory_params": mandatory_params
+                    }
+
+                    # Call API
+                    response = create_template(template_payload)
+
+                    if response and response.status_code == 200:
+                        st.success("✅ Template created successfully!")
+                        st.json(response.json())
+                        st.info("Form will reset. Refresh the page to create another template.")
+                    else:
+                        if response:
+                            st.error(f"❌ Error creating template: {response.text}")
+                        else:
+                            st.error("Failed to create template.")
+
+
 # -----------------------------
 # Main Entry
 # -----------------------------
 if not st.session_state.token:
     auth_ui()
+elif st.session_state.is_admin:
+    admin_dashboard_ui()
 else:
     dashboard_ui()
